@@ -7,6 +7,7 @@ from datetime import date
 from pathlib import Path
 
 import matplotlib
+
 matplotlib.use("Agg")  # 無頭模式
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
@@ -14,19 +15,29 @@ import matplotlib.font_manager as fm
 import numpy as np
 
 from src.config import FUTURES_CODE, FUTURES_NAME, INITIAL_CAPITAL, RISK_FREE_RATE
-from src.models import PortfolioSnapshot, Trade
+from src.models import CashFlow, PortfolioSnapshot, Trade
 
-# 設定中文字體（macOS）— 優先使用 Noto Sans TC（用戶安裝），再 fallback 到系統字體
-_CJK_FONT_PATHS = [
-    "/Users/stevelai/Library/Fonts/NotoSansTC-VariableFont_wght.ttf",
+# 設定中文字體 — 支援環境變數 CJK_FONT_PATH 覆寫，再嘗試常見路徑
+import os as _os
+
+_CJK_FONT_PATHS = [p for p in [_os.environ.get("CJK_FONT_PATH", "")] if p]
+_CJK_FONT_PATHS += [
+    str(Path.home() / "Library/Fonts/NotoSansTC-VariableFont_wght.ttf"),
     "/System/Library/Fonts/STHeiti Medium.ttc",
     "/System/Library/Fonts/STHeiti Light.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
 ]
 for _font_path in _CJK_FONT_PATHS:
-    if Path(_font_path).exists():
+    if _font_path and Path(_font_path).exists():
         fm.fontManager.addfont(_font_path)
 
-plt.rcParams["font.family"] = ["Noto Sans TC", "Heiti TC", "STHeiti", "Arial Unicode MS", "sans-serif"]
+plt.rcParams["font.family"] = [
+    "Noto Sans TC",
+    "Heiti TC",
+    "STHeiti",
+    "Arial Unicode MS",
+    "sans-serif",
+]
 plt.rcParams["axes.unicode_minus"] = False
 
 
@@ -37,7 +48,9 @@ def total_return(snapshots: list[PortfolioSnapshot], capital: float = INITIAL_CA
     return (snapshots[-1].equity - capital) / capital
 
 
-def annualized_return(snapshots: list[PortfolioSnapshot], capital: float = INITIAL_CAPITAL) -> float:
+def annualized_return(
+    snapshots: list[PortfolioSnapshot], capital: float = INITIAL_CAPITAL
+) -> float:
     """年化報酬率。"""
     if len(snapshots) < 2:
         return 0.0
@@ -105,6 +118,44 @@ def sharpe_ratio(snapshots: list[PortfolioSnapshot]) -> float:
 
     daily_rf = RISK_FREE_RATE / 252
     return (mean_daily - daily_rf) / std_daily * math.sqrt(252)
+
+
+def xirr(cash_flows: list[CashFlow]) -> float:
+    """計算 XIRR（年化內部報酬率），使用 Newton-Raphson 法。
+
+    cash_flows: amount < 0 表示投入，amount > 0 表示取回。
+    """
+    if len(cash_flows) < 2:
+        return 0.0
+
+    base_date = cash_flows[0].date
+
+    def npv(rate: float) -> float:
+        return sum(
+            cf.amount / (1 + rate) ** ((cf.date - base_date).days / 365.0) for cf in cash_flows
+        )
+
+    def npv_derivative(rate: float) -> float:
+        return sum(
+            -cf.amount
+            * ((cf.date - base_date).days / 365.0)
+            / (1 + rate) ** ((cf.date - base_date).days / 365.0 + 1)
+            for cf in cash_flows
+        )
+
+    rate = 0.1  # 初始猜測
+    for _ in range(200):
+        f = npv(rate)
+        f_prime = npv_derivative(rate)
+        if abs(f_prime) < 1e-12:
+            break
+        new_rate = rate - f / f_prime
+        # 限制範圍避免發散
+        new_rate = max(new_rate, -0.99)
+        if abs(new_rate - rate) < 1e-8:
+            return new_rate
+        rate = new_rate
+    return rate
 
 
 def win_rate(trades: list[Trade]) -> float:
@@ -326,7 +377,8 @@ def plot_results(
 
     fig = plt.figure(figsize=(16, 22))
     gs = fig.add_gridspec(
-        6, 1,
+        6,
+        1,
         height_ratios=[0.6, 1.2, 0.8, 0.8, 0.8, 0.8],
         hspace=0.35,
     )
@@ -337,7 +389,11 @@ def plot_results(
 
     monthly_line = f"\n每月定投: NT${total_monthly:>12,.0f}" if total_monthly > 0 else ""
     inject_line = f"\n不足補入: NT${total_injected:>12,.0f}" if total_injected > 0 else ""
-    capital_line = f"\n總投入:   NT${total_capital:>12,.0f}" if (total_monthly > 0 or total_injected > 0) else ""
+    capital_line = (
+        f"\n總投入:   NT${total_capital:>12,.0f}"
+        if (total_monthly > 0 or total_injected > 0)
+        else ""
+    )
     summary_left = (
         f"回測期間: {snapshots[0].trade_date} ~ {snapshots[-1].trade_date}\n"
         f"初始資金: NT${INITIAL_CAPITAL:>12,}\n"
@@ -355,18 +411,28 @@ def plot_results(
     )
 
     ax0.text(
-        0.02, 0.95, summary_left,
-        transform=ax0.transAxes, fontsize=11, verticalalignment="top",
+        0.02,
+        0.95,
+        summary_left,
+        transform=ax0.transAxes,
+        fontsize=11,
+        verticalalignment="top",
         bbox={"boxstyle": "round,pad=0.5", "facecolor": "#e8f4fd", "alpha": 0.8},
     )
     ax0.text(
-        0.52, 0.95, summary_right,
-        transform=ax0.transAxes, fontsize=11, verticalalignment="top",
+        0.52,
+        0.95,
+        summary_right,
+        transform=ax0.transAxes,
+        fontsize=11,
+        verticalalignment="top",
         bbox={"boxstyle": "round,pad=0.5", "facecolor": "#fdf2e8", "alpha": 0.8},
     )
     ax0.set_title(
         f"{FUTURES_NAME}加倉 + 週選 PUT 保護 回測報告 ({ratio_str})",
-        fontsize=15, fontweight="bold", pad=12,
+        fontsize=15,
+        fontweight="bold",
+        pad=12,
     )
 
     fmt_nt = plt.FuncFormatter(lambda x, _: f"{x:,.0f}")
@@ -383,15 +449,21 @@ def plot_results(
     ax1.annotate(
         f"最高 {equity[max_eq_idx]:,.0f}",
         xy=(dates[max_eq_idx], equity[max_eq_idx]),
-        xytext=(0, 10), textcoords="offset points",
-        fontsize=8, ha="center", color="#1a73e8",
+        xytext=(0, 10),
+        textcoords="offset points",
+        fontsize=8,
+        ha="center",
+        color="#1a73e8",
         arrowprops={"arrowstyle": "->", "color": "#1a73e8", "lw": 0.8},
     )
     ax1.annotate(
         f"最低 {equity[min_eq_idx]:,.0f}",
         xy=(dates[min_eq_idx], equity[min_eq_idx]),
-        xytext=(0, -18), textcoords="offset points",
-        fontsize=8, ha="center", color="red",
+        xytext=(0, -18),
+        textcoords="offset points",
+        fontsize=8,
+        ha="center",
+        color="red",
         arrowprops={"arrowstyle": "->", "color": "red", "lw": 0.8},
     )
     ax1.set_ylabel("NT$")

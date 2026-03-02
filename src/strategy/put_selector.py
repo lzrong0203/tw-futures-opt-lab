@@ -82,8 +82,7 @@ def select_put_by_premium(
         # 取最接近 min_premium 的（最便宜的有效保護）
         best = min(above_min, key=lambda x: x[1])
         logger.debug(
-            "PUT fallback: 無 [%.0f, %.0f] 區間候選人，選最接近 min 的: "
-            "strike=%d, premium=%.1f",
+            "PUT fallback: 無 [%.0f, %.0f] 區間候選人，選最接近 min 的: strike=%d, premium=%.1f",
             min_premium,
             max_premium,
             best[0].strike,

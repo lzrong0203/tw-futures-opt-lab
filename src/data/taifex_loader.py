@@ -9,7 +9,6 @@ from __future__ import annotations
 import csv
 import io
 import logging
-import os
 import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -197,6 +196,7 @@ def parse_futures_csv(raw_csv: str) -> list[FuturesBar]:
 
         try:
             trade_date = _parse_date(row[0])
+            contract_month = row[2].strip() if len(row) > 2 else ""
             open_price = _safe_float(row[3])
             high = _safe_float(row[4])
             low = _safe_float(row[5])
@@ -222,6 +222,7 @@ def parse_futures_csv(raw_csv: str) -> list[FuturesBar]:
                     close=close,
                     settle=settle if settle > 0 else close,
                     volume=volume,
+                    contract_month=contract_month,
                 )
             )
         except (ValueError, IndexError) as e:
