@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Data cache (downloaded TAIFEX CSVs)
+src/data/cache/
+
+# Generated artifacts
+*.png
+*.pdf
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+
+# Node (frontend)
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Docker
+sqlite-data/
+
+# Coverage
+.coverage
+htmlcov/
+coverage.xml
