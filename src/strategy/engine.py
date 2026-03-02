@@ -23,6 +23,7 @@ from src.config import (
     ALLOW_AUTO_INJECTION,
     FUTURES_CODE,
     FUTURES_COMMISSION,
+    OPTIONS_CODE,
     FUTURES_MAINTENANCE_RATIO,
     FUTURES_MARGIN_RATIO,
     FUTURES_MULTIPLIER,
@@ -36,6 +37,7 @@ from src.config import (
     OPTIONS_TAX_RATE,
     PAUSE_ADD_DRAWDOWN_PCT,
     POSITION_SIZING_TIERS,
+    TARGET_RISK_RATIO,
     TXO_MULTIPLIER,
 )
 from src.calendar.settlement import (
@@ -302,7 +304,7 @@ def run_backtest(
 
         if _can_add_position(state, current_price):
             if not _is_drawdown_paused(state, equity):
-                _try_add_position(state, day, futures_bar, options_today, settlement_dates)
+                _try_add_position(state, day, futures_bar, options_today, settlement_dates, put_index)
             else:
                 logger.debug(
                     "回撤暫停加倉: date=%s, dd=%.1f%%",
@@ -481,7 +483,7 @@ def _close_puts_fifo(
         state.trades.append(
             Trade(
                 trade_date=day,
-                instrument="TXO_PUT",
+                instrument=OPTIONS_CODE,
                 action="SELL",
                 price=sell_price,
                 contracts=close_qty,
@@ -583,6 +585,17 @@ def _check_margin_call(
     remaining = sum(p.contracts for p in state.futures_positions)
     logger.info("Margin call 完成: date=%s, 剩餘期貨=%d口", day, remaining)
 
+    # 全部平倉後重置 peak_equity，避免回撤暫停死鎖
+    if remaining == 0:
+        puts_value = _puts_market_value(state.put_positions, options_today, put_index)
+        new_equity = state.cash + puts_value  # 無期貨 → 未實現損益為 0
+        logger.info(
+            "追繳清倉完畢，重置 peak_equity: %.0f → %.0f",
+            state.peak_equity,
+            new_equity,
+        )
+        state.peak_equity = new_equity
+
 
 # ────────────────────────────────────────────
 # 結算日處理
@@ -629,7 +642,7 @@ def _handle_settlement(
         state.trades.append(
             Trade(
                 trade_date=day,
-                instrument="TXO_PUT",
+                instrument=OPTIONS_CODE,
                 action="SETTLE",
                 price=settle_price,
                 contracts=put.contracts,
@@ -744,7 +757,7 @@ def _handle_settlement(
     state.trades.append(
         Trade(
             trade_date=day,
-            instrument="TXO_PUT",
+            instrument=OPTIONS_CODE,
             action="ROLL",
             price=premium_with_spread,
             contracts=puts_needed,
@@ -773,10 +786,13 @@ def _try_add_position(
     futures_bar: FuturesBar,
     options_today: list[OptionBar],
     settlement_dates: list[date],
+    put_index: dict[tuple[int, date], float] | None = None,
 ) -> None:
-    """嘗試加倉：買 N 口微台指 + 1 口 PUT。
+    """嘗試連續加倉直到風險指標接近 TARGET_RISK_RATIO。
 
-    若 allow_auto_injection=False 且資金不足，直接放棄加倉。
+    每組 = N 口微台指 + 1 口 PUT。
+    雙重限制：POSITION_SIZING_TIERS 資金比例 + 風險指標目標。
+    若 allow_auto_injection=False 且資金不足，停止加倉。
     """
     fpp = state.futures_per_put
     current_price = futures_bar.close
@@ -786,8 +802,9 @@ def _try_add_position(
         current_price, is_buy=True, slippage_points=FUTURES_SLIPPAGE_POINTS
     )
     margin_per_lot = _dynamic_margin(current_price)
+    margin_per_group = margin_per_lot * fpp
 
-    # 找 PUT
+    # 找 PUT（只做一次）
     target_expiry = current_or_next_settlement(day, settlement_dates)
     if target_expiry is None:
         return
@@ -823,96 +840,117 @@ def _try_add_position(
     )
     put_cost = put_premium_with_spread * TXO_MULTIPLIER + OPTIONS_COMMISSION
 
-    # 一組所需：N 口期貨保證金 + N 口期貨手續費 + 1 口 PUT 成本
-    cost_per_group = margin_per_lot * fpp + FUTURES_COMMISSION * fpp + put_cost
+    # 每組交易成本（手續費 + PUT 權利金，不含保證金）
+    tx_cost = FUTURES_COMMISSION * fpp + put_cost
 
-    # 計算當前權益
-    futures_pnl = _futures_unrealized_pnl(state.futures_positions, current_price)
-    puts_value = _puts_market_value(state.put_positions, options_today)
-    equity = state.cash + futures_pnl + puts_value
+    # ── 連續加倉迴圈 ──
+    if put_index is None:
+        put_index = _build_put_price_index(options_today)
+    max_groups = 500  # 安全上限，防止配置錯誤導致無限迴圈
+    groups_added = 0
+    while groups_added < max_groups:
+        # 計算當前風險狀態
+        margin = _margin_required(state.futures_positions, current_price)
+        futures_pnl = _futures_unrealized_pnl(state.futures_positions, current_price)
+        puts_value = _puts_market_value(state.put_positions, options_today, put_index)
+        equity = state.cash + futures_pnl + puts_value
 
-    # 動態資金控管
-    sizing_ratio = _position_sizing_ratio(equity)
-    available_for_new = state.cash * sizing_ratio
+        # 資金控管：依水位限制可用資金
+        sizing_ratio = _position_sizing_ratio(equity)
+        available = state.cash * sizing_ratio
 
-    if available_for_new < cost_per_group:
-        if state.allow_auto_injection:
-            shortfall = cost_per_group - state.cash
-            if shortfall > 0:
-                state.cash += shortfall
-                state.total_injected += shortfall
-                state.cash_flows.append(CashFlow(date=day, amount=-shortfall))
-                logger.info(
-                    "補入資金: date=%s, amount=%.0f, 累計補入=%.0f",
-                    day,
-                    shortfall,
-                    state.total_injected,
-                )
-        else:
-            logger.debug(
-                "資金不足，跳過加倉: date=%s, available=%.0f, need=%.0f",
-                day,
-                available_for_new,
-                cost_per_group,
-            )
-            return
+        # 檢查 1: 可用資金夠付交易成本
+        if available < tx_cost:
+            if state.allow_auto_injection:
+                shortfall = tx_cost - available
+                if shortfall > 0:
+                    state.cash += shortfall
+                    state.total_injected += shortfall
+                    state.cash_flows.append(CashFlow(date=day, amount=-shortfall))
+                    logger.info(
+                        "補入資金: date=%s, amount=%.0f, 累計補入=%.0f",
+                        day,
+                        shortfall,
+                        state.total_injected,
+                    )
+            else:
+                break
 
-    # 加倉 N 口期貨
-    state.cash -= FUTURES_COMMISSION * fpp
-    new_futures = FuturesPosition(
-        entry_date=day,
-        entry_price=entry_price,
-        contracts=fpp,
-    )
-    state.futures_positions.append(new_futures)
+        # 檢查 2: 預估加一組後的風險指標
+        new_margin = margin + margin_per_group
+        new_equity = equity - tx_cost
+        projected_ratio = new_equity / new_margin if new_margin > 0 else float("inf")
 
-    state.trades.append(
-        Trade(
-            trade_date=day,
-            instrument=FUTURES_CODE,
-            action="BUY",
-            price=entry_price,
+        if projected_ratio < TARGET_RISK_RATIO:
+            break
+
+        # ── 加一組：N 口期貨 ──
+        state.cash -= FUTURES_COMMISSION * fpp
+        new_futures = FuturesPosition(
+            entry_date=day,
+            entry_price=entry_price,
             contracts=fpp,
-            commission=FUTURES_COMMISSION * fpp,
         )
-    )
+        state.futures_positions.append(new_futures)
 
-    # 加倉 1 口 PUT
-    state.cash -= put_cost
-    state.total_put_cost += put_cost
+        state.trades.append(
+            Trade(
+                trade_date=day,
+                instrument=FUTURES_CODE,
+                action="BUY",
+                price=entry_price,
+                contracts=fpp,
+                commission=FUTURES_COMMISSION * fpp,
+            )
+        )
 
-    new_put = PutPosition(
-        entry_date=day,
-        strike=put_bar.strike,
-        expiry_date=target_expiry,
-        entry_premium=put_premium_with_spread,
-        contracts=1,
-    )
-    state.put_positions.append(new_put)
+        # ── 加一組：1 口 PUT ──
+        state.cash -= put_cost
+        state.total_put_cost += put_cost
 
-    state.trades.append(
-        Trade(
-            trade_date=day,
-            instrument="TXO_PUT",
-            action="BUY",
-            price=put_premium_with_spread,
-            contracts=1,
-            commission=OPTIONS_COMMISSION,
+        new_put = PutPosition(
+            entry_date=day,
             strike=put_bar.strike,
-            expiry=target_expiry,
+            expiry_date=target_expiry,
+            entry_premium=put_premium_with_spread,
+            contracts=1,
         )
-    )
+        state.put_positions.append(new_put)
+
+        state.trades.append(
+            Trade(
+                trade_date=day,
+                instrument=OPTIONS_CODE,
+                action="BUY",
+                price=put_premium_with_spread,
+                contracts=1,
+                commission=OPTIONS_COMMISSION,
+                strike=put_bar.strike,
+                expiry=target_expiry,
+            )
+        )
+
+        groups_added += 1
+
+        logger.debug(
+            "加倉 #%d: %s@%.0f x%d + PUT strike=%d@%.1f, expiry=%s (risk=%.1f%%, sizing=%.0f%%)",
+            groups_added,
+            FUTURES_CODE,
+            entry_price,
+            fpp,
+            put_bar.strike,
+            put_premium_with_spread,
+            target_expiry,
+            projected_ratio * 100,
+            sizing_ratio * 100,
+        )
 
     # 記錄加倉時間（冷卻期用）
-    state.last_add_day_idx = state.trading_day_idx
-
-    logger.debug(
-        "加倉: %s@%.0f x%d + PUT strike=%d@%.1f, expiry=%s (sizing=%.0f%%)",
-        FUTURES_CODE,
-        entry_price,
-        fpp,
-        put_bar.strike,
-        put_premium_with_spread,
-        target_expiry,
-        sizing_ratio * 100,
-    )
+    if groups_added > 0:
+        state.last_add_day_idx = state.trading_day_idx
+        logger.info(
+            "加倉完成: date=%s, groups=%d, 新增期貨=%d口",
+            day,
+            groups_added,
+            groups_added * fpp,
+        )

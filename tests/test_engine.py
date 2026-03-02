@@ -67,21 +67,21 @@ class TestCanAddPosition:
         assert _can_add_position(state, 21900) is False
 
     def test_cooldown_period(self) -> None:
-        # Last add was 3 days ago, cooldown is 5
+        # Last add was 1 day ago, cooldown is 3
         state = self._make_state(
             prev_close=22000,
             prices=[22000] * 20,
-            last_add_idx=97,
+            last_add_idx=99,
             current_idx=100,
         )
         assert _can_add_position(state, 22200) is False
 
     def test_cooldown_expired(self) -> None:
-        # Last add was 6 days ago, cooldown is 5
+        # Last add was 4 days ago, cooldown is 3
         state = self._make_state(
             prev_close=22000,
             prices=[22000] * 20,
-            last_add_idx=94,
+            last_add_idx=96,
             current_idx=100,
         )
         assert _can_add_position(state, 22200) is True

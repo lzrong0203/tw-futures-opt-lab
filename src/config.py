@@ -12,6 +12,7 @@ BACKTEST_END = date(2026, 2, 28)
 FUTURES_MULTIPLIER: int = 10  # 微台指每點 NT$10（小台 50、大台 200）
 FUTURES_TICK_SIZE: float = 1  # 最小跳動點
 FUTURES_CODE: str = "TMF"  # 商品代碼（報表顯示用）
+OPTIONS_CODE: str = "TXO_PUT"  # 選擇權代碼（報表顯示用）
 FUTURES_NAME: str = "微台指"  # 中文名稱（報表顯示用）
 # 保證金比例（動態計算：指數 × 乘數 × 比例）
 FUTURES_MARGIN_RATIO: float = 0.085  # 原始保證金約為合約價值的 8.5%
@@ -59,13 +60,14 @@ FUTURES_ROLLOVER_COST_POINTS: float = 5.0  # 轉倉價差（點）
 
 # ── 加倉條件過濾 ──
 ADD_MIN_PRICE_CHANGE_PCT: float = 0.005  # 最低漲幅 0.5%
-ADD_MA_PERIOD: int = 20  # 趨勢過濾：收盤 > N 日均線
-ADD_COOLDOWN_DAYS: int = 5  # 冷卻期：兩次加倉至少間隔 N 個交易日
+ADD_MA_PERIOD: int = 10  # 趨勢過濾：收盤 > N 日均線
+ADD_COOLDOWN_DAYS: int = 3  # 冷卻期：兩次加倉至少間隔 N 個交易日
 
 # ── 自動補入資金 ──
 ALLOW_AUTO_INJECTION: bool = False  # 預設關閉，僅靠月投
 
 # ── 風控 ──
+TARGET_RISK_RATIO: float = 1.10  # 目標風險指標（equity / margin），110% = 積極建倉
 PAUSE_ADD_DRAWDOWN_PCT: float = 0.15  # 回撤 > 15% 時暫停加倉
 TRAILING_STOP_ENABLED: bool = False  # 移動停損（預設關閉）
 TRAILING_STOP_POINTS: float = 500.0  # 移動停損距離（點）

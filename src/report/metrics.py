@@ -14,7 +14,7 @@ import matplotlib.dates as mdates
 import matplotlib.font_manager as fm
 import numpy as np
 
-from src.config import FUTURES_CODE, FUTURES_NAME, INITIAL_CAPITAL, RISK_FREE_RATE
+from src.config import FUTURES_CODE, FUTURES_NAME, INITIAL_CAPITAL, OPTIONS_CODE, RISK_FREE_RATE
 from src.models import CashFlow, PortfolioSnapshot, Trade
 
 # 設定中文字體 — 支援環境變數 CJK_FONT_PATH 覆寫，再嘗試常見路徑
@@ -243,7 +243,7 @@ def print_position_details(
         return
 
     fut_buys = [t for t in trades if t.action == "BUY" and t.instrument == FUTURES_CODE]
-    put_buys = [t for t in trades if t.action == "BUY" and t.instrument == "TXO_PUT"]
+    put_buys = [t for t in trades if t.action == "BUY" and t.instrument == OPTIONS_CODE]
 
     print()
     print("=" * 100)
@@ -274,7 +274,7 @@ def print_position_details(
     print(f"  合計加倉: {len(fut_buys)} 次")
 
     # PUT 換倉明細
-    rolls = [t for t in trades if t.action == "ROLL" and t.instrument == "TXO_PUT"]
+    rolls = [t for t in trades if t.action == "ROLL" and t.instrument == OPTIONS_CODE]
     if rolls:
         print()
         print("=" * 100)
@@ -297,7 +297,7 @@ def print_position_details(
         print(f"  換倉總成本: NT${roll_total:,.0f}")
 
     # PUT 結算明細
-    settles = [t for t in trades if t.action == "SETTLE" and t.instrument == "TXO_PUT"]
+    settles = [t for t in trades if t.action == "SETTLE" and t.instrument == OPTIONS_CODE]
     if settles:
         print()
         print("=" * 100)
