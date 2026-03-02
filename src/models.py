@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date
 
 
@@ -17,6 +17,7 @@ class FuturesBar:
     close: float
     settle: float  # 結算價
     volume: int
+    contract_month: str = ""  # 合約月份 e.g. "202503"（用於偵測轉倉）
 
 
 @dataclass(frozen=True)
@@ -86,3 +87,14 @@ class PortfolioSnapshot:
     futures_count: int  # 期貨持倉口數
     puts_count: int  # PUT 持倉口數
     daily_pnl: float = 0.0  # 當日損益
+
+
+@dataclass(frozen=True)
+class CashFlow:
+    """現金流事件（用於 XIRR 計算）。
+
+    amount < 0 表示投入資金，amount > 0 表示取回資金。
+    """
+
+    date: date
+    amount: float

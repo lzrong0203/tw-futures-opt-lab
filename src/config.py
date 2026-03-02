@@ -35,19 +35,40 @@ PUT_PREMIUM_MAX: float = 30.0  # 最高權利金（點）→ NT$1,500/口
 POSITION_SIZING_TIERS: list[tuple[int, float]] = [
     (4_000_000, 0.30),  # 權益 >= 400 萬 → 動用 30%
     (2_000_000, 0.50),  # 權益 >= 200 萬 → 動用 50%
-    (0, 1.00),          # 權益 < 200 萬 → 動用 100%（全額）
+    (0, 1.00),  # 權益 < 200 萬 → 動用 100%（全額）
 ]
 
 # ── 期貨對 PUT 比例 ──
 # N 口微台指配 1 口 TXO PUT
 # 1 口 TXO PUT (50元/點) = 5 口微台 (10元/點) 的曝險
-FUTURES_PER_PUT: int = 1  # 幾口期貨配 1 口 PUT（由 main.py 批次覆寫 1~5）
+DOLLAR_NEUTRAL_RATIO: int = TXO_MULTIPLIER // FUTURES_MULTIPLIER  # = 5
+FUTURES_PER_PUT: int = DOLLAR_NEUTRAL_RATIO  # 預設等值保護（由 main.py 覆寫）
 
 # ── 交易成本 ──
 FUTURES_COMMISSION: int = 8  # 微台指手續費 NT$/口（單邊，比小台便宜）
 OPTIONS_COMMISSION: int = 15  # 選擇權手續費 NT$/口（單邊）
 FUTURES_TAX_RATE: float = 0.00002  # 期貨交易稅 十萬分之二
 OPTIONS_TAX_RATE: float = 0.001  # 選擇權交易稅 千分之一
+
+# ── 滑價模型 ──
+FUTURES_SLIPPAGE_POINTS: float = 2.0  # 期貨滑價（點）
+OPTIONS_SPREAD_RATIO: float = 0.30  # PUT 買賣價差佔權利金比例（30%）
+
+# ── 期貨轉倉成本 ──
+FUTURES_ROLLOVER_COST_POINTS: float = 5.0  # 轉倉價差（點）
+
+# ── 加倉條件過濾 ──
+ADD_MIN_PRICE_CHANGE_PCT: float = 0.005  # 最低漲幅 0.5%
+ADD_MA_PERIOD: int = 20  # 趨勢過濾：收盤 > N 日均線
+ADD_COOLDOWN_DAYS: int = 5  # 冷卻期：兩次加倉至少間隔 N 個交易日
+
+# ── 自動補入資金 ──
+ALLOW_AUTO_INJECTION: bool = False  # 預設關閉，僅靠月投
+
+# ── 風控 ──
+PAUSE_ADD_DRAWDOWN_PCT: float = 0.15  # 回撤 > 15% 時暫停加倉
+TRAILING_STOP_ENABLED: bool = False  # 移動停損（預設關閉）
+TRAILING_STOP_POINTS: float = 500.0  # 移動停損距離（點）
 
 # ── 資料快取 ──
 CACHE_DIR: str = "src/data/cache"
