@@ -31,8 +31,9 @@ frontend/out/
 .env.local
 .env.*.local
 
-# Docker
+# Docker / Database
 sqlite-data/
+*.db
 
 # Coverage
 .coverage
