@@ -1,0 +1,16 @@
+.venv/
+.git/
+.github/
+__pycache__/
+*.pyc
+src/data/cache/
+*.png
+*.pdf
+.DS_Store
+.claude/
+node_modules/
+.next/
+.env
+.env.local
+coverage.xml
+htmlcov/
