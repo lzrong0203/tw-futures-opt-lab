@@ -43,7 +43,6 @@ from src.config import (
 from src.calendar.settlement import (
     current_or_next_settlement,
     get_settlement_dates,
-    is_settlement_day,
     next_settlement_date,
 )
 from src.models import (
@@ -194,8 +193,6 @@ def _build_put_price_index(
     """建立 PUT 行情的快速查詢索引：(strike, expiry) -> 最佳市價。"""
     index: dict[tuple[int, date], float] = {}
     for o in options_today:
-        if o.cp != "P":
-            continue
         key = (o.strike, o.expiry_date)
         price = o.close if o.close > 0 else o.settle
         existing = index.get(key)
@@ -258,6 +255,7 @@ def run_backtest(
     state.cash_flows.append(CashFlow(date=start, amount=-initial_capital))
 
     settlement_dates = get_settlement_dates(start, end)
+    settlement_set = frozenset(settlement_dates)
 
     for day in trading_days:
         if day < start or day > end:
@@ -293,8 +291,8 @@ def run_backtest(
         _handle_rollover(state, day, futures_bar)
 
         # ── Step 1: 結算日處理 ──
-        if is_settlement_day(day, settlement_dates):
-            _handle_settlement(state, day, futures_bar, options_today, settlement_dates)
+        if day in settlement_set:
+            _handle_settlement(state, day, futures_bar, options_today, settlement_dates, put_index)
 
         # ── Step 2: 判斷加倉（加入漲幅門檻 + 趨勢 + 冷卻期 + 回撤暫停）──
         futures_pnl = _futures_unrealized_pnl(state.futures_positions, current_price)
@@ -610,8 +608,12 @@ def _handle_settlement(
     futures_bar: FuturesBar,
     options_today: list[OptionBar],
     settlement_dates: list[date],
+    put_index: dict[tuple[int, date], float] | None = None,
 ) -> None:
     """處理結算日：結算到期 PUT，換倉到下一期。"""
+    if put_index is None:
+        put_index = _build_put_price_index(options_today)
+
     settled_puts: list[PutPosition] = []
     remaining_puts: list[PutPosition] = []
 
@@ -621,15 +623,16 @@ def _handle_settlement(
         else:
             remaining_puts.append(put)
 
+    # 結算日用結算價（settle），不用收盤價（close）
+    settle_index: dict[tuple[int, date], float] = {}
+    for o in options_today:
+        key = (o.strike, o.expiry_date)
+        if o.settle > 0:
+            existing = settle_index.get(key, 0.0)
+            settle_index[key] = max(existing, o.settle)
+
     for put in settled_puts:
-        settle_price = 0.0
-        matching = [
-            o
-            for o in options_today
-            if o.strike == put.strike and o.expiry_date == put.expiry_date and o.cp == "P"
-        ]
-        if matching:
-            settle_price = max(m.settle for m in matching)
+        settle_price = settle_index.get((put.strike, put.expiry_date), 0.0)
 
         pnl = (settle_price - put.entry_premium) * TXO_MULTIPLIER * put.contracts
         tax = (

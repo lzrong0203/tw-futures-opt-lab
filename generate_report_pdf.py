@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+from datetime import date
+from pathlib import Path
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
@@ -22,7 +24,7 @@ from reportlab.platypus import (
 )
 
 # ── 中文字型註冊 ──
-FONT_PATH = "/Users/stevelai/Library/Fonts/NotoSansTC-VariableFont_wght.ttf"
+FONT_PATH = str(Path.home() / "Library/Fonts/NotoSansTC-VariableFont_wght.ttf")
 pdfmetrics.registerFont(TTFont("NotoSansTC", FONT_PATH))
 
 # ── 自定義樣式 ──
@@ -300,7 +302,7 @@ def build_report(output_path: str = "backtest_1to1_report.pdf") -> None:
     story.append(PageBreak())
     story.append(_p("七、權益曲線圖", style_h1))
 
-    chart_path = "/Users/stevelai/Documents/opt_backtest/backtest_1to1.png"
+    chart_path = str(Path(__file__).parent / "backtest_1to1.png")
     if os.path.exists(chart_path):
         img_width = 16 * cm
         img = Image(chart_path, width=img_width, height=img_width * 0.75)
@@ -345,7 +347,7 @@ def build_report(output_path: str = "backtest_1to1_report.pdf") -> None:
 
     story.append(Spacer(1, 20))
     story.append(_p(
-        "報告產生日期: 2026/02/25 | 資料來源: 台灣期貨交易所 (TAIFEX)",
+        f"報告產生日期: {date.today().strftime('%Y/%m/%d')} | 資料來源: 台灣期貨交易所 (TAIFEX)",
         style_small,
     ))
 
