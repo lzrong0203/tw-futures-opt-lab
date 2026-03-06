@@ -35,11 +35,39 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/backtest", tags=["backtest"])
 
 
+def _extract_scenario(data: dict) -> dict | None:
+    """Extract scenario data, handling both old (nested) and new (flat) format.
+
+    New format: ``{"snapshots": [...], "trades": [...], ...}``
+    Old format: ``{"ratio_3": {"snapshots": [...], ...}, ...}``
+    """
+    if "snapshots" in data:
+        return data
+    first_key = next(iter(data), None)
+    if first_key and isinstance(data[first_key], dict):
+        return data[first_key]
+    return None
+
+
+def _extract_summary(summary_data: dict) -> dict | None:
+    """Extract metrics from summary, handling both old and new format.
+
+    New format: ``{"final_equity": ..., "futures_per_put": ..., ...}``
+    Old format: ``{"ratio_3": {"final_equity": ..., ...}, ...}``
+    """
+    if "futures_per_put" in summary_data:
+        return summary_data
+    first_key = next(iter(summary_data), None)
+    if first_key and isinstance(summary_data[first_key], dict):
+        return summary_data[first_key]
+    return None
+
+
 async def _run_background(backtest_id: str, req: BacktestRequest) -> None:
     """Background coroutine: execute backtest then persist results."""
     try:
         results_json, summary_json = await execute_backtest(
-            ratios=req.ratios,
+            ratio=req.ratio,
             start=req.backtest_start,
             end=req.backtest_end,
             initial_capital=req.initial_capital,
@@ -88,10 +116,8 @@ async def get_backtest_detail(backtest_id: str) -> BacktestResult:
 
     if row["status"] == "completed" and row.get("results_json"):
         data = json.loads(row["results_json"])
-        # Take the first ratio's results for the detail view
-        first_key = next(iter(data), None)
-        if first_key:
-            scenario = data[first_key]
+        scenario = _extract_scenario(data)
+        if scenario:
             result.snapshots = [SnapshotSchema.model_validate(s) for s in scenario["snapshots"]]
             result.trades = [TradeSchema.model_validate(t) for t in scenario["trades"]]
             result.cash_flows = [CashFlowSchema.model_validate(cf) for cf in scenario["cash_flows"]]
@@ -131,9 +157,9 @@ async def list_backtest_runs(limit: int = 50, offset: int = 0) -> BacktestListRe
             item.parameters = BacktestRequest.model_validate_json(row["parameters"])
         if row.get("summary"):
             summary_data = json.loads(row["summary"])
-            first_key = next(iter(summary_data), None)
-            if first_key:
-                item.metrics = MetricsSummary.model_validate(summary_data[first_key])
+            metrics_data = _extract_summary(summary_data)
+            if metrics_data:
+                item.metrics = MetricsSummary.model_validate(metrics_data)
         items.append(item)
 
     return BacktestListResponse(items=items, total=total)

@@ -33,10 +33,13 @@ export default function RootLayout({
             TW Futures Lab
           </Link>
           <Link href="/backtest/new" className="hover:underline">
-            New Backtest
+            新增回測
           </Link>
           <Link href="/history" className="hover:underline">
-            History
+            歷史紀錄
+          </Link>
+          <Link href="/compare" className="hover:underline">
+            比較
           </Link>
         </nav>
         <main className="mx-auto max-w-6xl p-6">{children}</main>

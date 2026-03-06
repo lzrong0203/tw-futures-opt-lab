@@ -26,7 +26,7 @@ def _serialise_date(obj: object) -> str:
     raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
 
-def _run_single(
+def run_single(
     ratio: int,
     start: date,
     end: date,
@@ -91,41 +91,18 @@ def _run_single(
     }
 
 
-def run_all_ratios(
-    ratios: list[int],
-    start: date,
-    end: date,
-    initial_capital: float = INITIAL_CAPITAL,
-    monthly_contribution: float = MONTHLY_CONTRIBUTION,
-    allow_auto_injection: bool = False,
-) -> dict:
-    """Run backtests for all ratios and return combined results."""
-    results: dict[str, dict] = {}
-    for ratio in ratios:
-        key = f"ratio_{ratio}"
-        results[key] = _run_single(
-            ratio=ratio,
-            start=start,
-            end=end,
-            initial_capital=initial_capital,
-            monthly_contribution=monthly_contribution,
-            allow_auto_injection=allow_auto_injection,
-        )
-    return results
-
-
 async def execute_backtest(
-    ratios: list[int],
+    ratio: int,
     start: date,
     end: date,
     initial_capital: float = INITIAL_CAPITAL,
     monthly_contribution: float = MONTHLY_CONTRIBUTION,
     allow_auto_injection: bool = False,
 ) -> tuple[str, str]:
-    """Run backtests in a thread pool and return (results_json, summary_json)."""
-    results = await asyncio.to_thread(
-        run_all_ratios,
-        ratios=ratios,
+    """Run a single backtest in a thread pool and return (results_json, summary_json)."""
+    result = await asyncio.to_thread(
+        run_single,
+        ratio=ratio,
         start=start,
         end=end,
         initial_capital=initial_capital,
@@ -133,10 +110,6 @@ async def execute_backtest(
         allow_auto_injection=allow_auto_injection,
     )
 
-    summary: dict[str, dict] = {}
-    for key, data in results.items():
-        summary[key] = data["metrics"]
-
-    results_json = json.dumps(results, default=_serialise_date)
-    summary_json = json.dumps(summary, default=_serialise_date)
+    results_json = json.dumps(result, default=_serialise_date)
+    summary_json = json.dumps(result["metrics"], default=_serialise_date)
     return results_json, summary_json
