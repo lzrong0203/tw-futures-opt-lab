@@ -14,7 +14,14 @@ import matplotlib.dates as mdates
 import matplotlib.font_manager as fm
 import numpy as np
 
-from src.config import FUTURES_CODE, FUTURES_NAME, INITIAL_CAPITAL, OPTIONS_CODE, RISK_FREE_RATE
+from src.config import (
+    FUTURES_CODE,
+    FUTURES_NAME,
+    INITIAL_CAPITAL,
+    OPTIONS_CODE,
+    RISK_FREE_RATE,
+    TXO_MULTIPLIER,
+)
 from src.models import CashFlow, PortfolioSnapshot, Trade
 
 # 設定中文字體 — 支援環境變數 CJK_FONT_PATH 覆寫，再嘗試常見路徑
@@ -288,12 +295,12 @@ def print_position_details(
         for t in rolls:
             strike_str = f"{t.strike:,}" if t.strike else "-"
             expiry_str = str(t.expiry) if t.expiry else "-"
-            cost = t.price * 50 * t.contracts + t.commission
+            cost = t.price * TXO_MULTIPLIER * t.contracts + t.commission
             print(
                 f"  {t.trade_date!s:<12} {strike_str:>8} {expiry_str:<12} "
                 f"{t.price:>8.1f} {t.contracts:>6} {cost:>12,.0f}"
             )
-        roll_total = sum(t.price * 50 * t.contracts + t.commission for t in rolls)
+        roll_total = sum(t.price * TXO_MULTIPLIER * t.contracts + t.commission for t in rolls)
         print(f"  換倉總成本: NT${roll_total:,.0f}")
 
     # PUT 結算明細

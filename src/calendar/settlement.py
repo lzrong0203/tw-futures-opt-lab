@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import bisect
 from datetime import date, timedelta
 from typing import Sequence
 
@@ -59,35 +60,26 @@ def get_trading_days(start: date, end: date) -> list[date]:
     return days
 
 
-def get_wednesdays(start: date, end: date) -> list[date]:
-    """取得期間內所有週三。"""
-    # 找到第一個週三
+def _get_weekdays(start: date, end: date, weekday: int) -> list[date]:
+    """取得期間內所有指定星期幾的日期。weekday: 0=Mon, 2=Wed, 4=Fri。"""
     current = start
-    while current.weekday() != 2:  # 2 = Wednesday
+    while current.weekday() != weekday:
         current += timedelta(days=1)
 
-    wednesdays: list[date] = []
+    result: list[date] = []
     while current <= end:
-        wednesdays.append(current)
+        result.append(current)
         current += timedelta(days=7)
-    return wednesdays
+    return result
+
+
+def get_wednesdays(start: date, end: date) -> list[date]:
+    """取得期間內所有週三。"""
+    return _get_weekdays(start, end, 2)
 
 
 # 週五到期台指選擇權上市日（2025/06/27）
 _FRIDAY_SETTLEMENT_START = date(2025, 6, 27)
-
-
-def _get_fridays(start: date, end: date) -> list[date]:
-    """取得期間內所有週五。"""
-    current = start
-    while current.weekday() != 4:  # 4 = Friday
-        current += timedelta(days=1)
-
-    fridays: list[date] = []
-    while current <= end:
-        fridays.append(current)
-        current += timedelta(days=7)
-    return fridays
 
 
 def get_settlement_dates(start: date, end: date) -> list[date]:
@@ -109,7 +101,7 @@ def get_settlement_dates(start: date, end: date) -> list[date]:
     # 注意：週五遇假日時直接跳過（不退到週四），因為台指週選只有週三/週五到期合約
     fri_start = max(start, _FRIDAY_SETTLEMENT_START)
     if fri_start <= end:
-        fridays = _get_fridays(fri_start, end)
+        fridays = _get_weekdays(fri_start, end, 4)
         for fri in fridays:
             if is_trading_day(fri):
                 settlements.add(fri)
@@ -152,18 +144,14 @@ def get_monthly_settlement_dates(start: date, end: date) -> list[date]:
 
 def next_settlement_date(from_date: date, settlement_dates: Sequence[date]) -> date | None:
     """找到 from_date 之後（不含當天）的最近結算日。"""
-    for sd in settlement_dates:
-        if sd > from_date:
-            return sd
-    return None
+    idx = bisect.bisect_right(settlement_dates, from_date)
+    return settlement_dates[idx] if idx < len(settlement_dates) else None
 
 
 def current_or_next_settlement(from_date: date, settlement_dates: Sequence[date]) -> date | None:
     """找到 from_date 當天或之後的最近結算日。"""
-    for sd in settlement_dates:
-        if sd >= from_date:
-            return sd
-    return None
+    idx = bisect.bisect_left(settlement_dates, from_date)
+    return settlement_dates[idx] if idx < len(settlement_dates) else None
 
 
 def is_settlement_day(d: date, settlement_dates: Sequence[date]) -> bool:

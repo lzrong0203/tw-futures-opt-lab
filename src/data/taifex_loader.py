@@ -15,14 +15,17 @@ from pathlib import Path
 
 import requests
 
-from src.config import CACHE_DIR
+from src.config import CACHE_DIR, TAIFEX_FUTURES_URL, TAIFEX_OPTIONS_URL
 from src.models import FuturesBar, OptionBar
 
 logger = logging.getLogger(__name__)
 
-# TAIFEX 每日行情查詢 URL
-_FUTURES_URL = "https://www.taifex.com.tw/cht/3/futDataDown"
-_OPTIONS_URL = "https://www.taifex.com.tw/cht/3/optDataDown"
+# TAIFEX 每日行情查詢 URL（使用 config.py 中定義的常數）
+_FUTURES_URL = TAIFEX_FUTURES_URL
+_OPTIONS_URL = TAIFEX_OPTIONS_URL
+
+# 接受 TXO 及所有週選合約代碼
+_VALID_OPTION_CODES = frozenset({"TXO", "TX1", "TX2", "TX4", "TX5"})
 
 _SESSION = requests.Session()
 _SESSION.headers.update(
@@ -79,12 +82,7 @@ def _download_options_csv(start: date, end: date) -> str:
 def _parse_date(s: str) -> date:
     """解析日期字串，支援 YYYY/MM/DD 格式。"""
     s = s.strip()
-    for fmt in ("%Y/%m/%d", "%Y/%m/%d"):
-        try:
-            return datetime.strptime(s, fmt).date()
-        except ValueError:
-            continue
-    raise ValueError(f"無法解析日期: {s!r}")
+    return datetime.strptime(s, "%Y/%m/%d").date()
 
 
 def _safe_float(s: str) -> float:
@@ -256,9 +254,7 @@ def parse_options_csv(raw_csv: str) -> list[OptionBar]:
             continue
 
         contract = row[1].strip()
-        # 接受 TXO 及所有週選合約代碼
-        valid_codes = {"TXO", "TX1", "TX2", "TX4", "TX5"}
-        if contract not in valid_codes:
+        if contract not in _VALID_OPTION_CODES:
             continue
 
         try:
