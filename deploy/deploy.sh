@@ -1,5 +1,5 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
 # ── 設定 ──
 REMOTE="my_server"
@@ -21,7 +21,7 @@ rsync -avz --delete \
   "${REMOTE}:${REMOTE_DIR}/"
 
 echo "=== 2. 在遠端建置並啟動容器 ==="
-ssh "${REMOTE}" "cd ${REMOTE_DIR} && docker compose -f ${COMPOSE_FILE} build && docker compose -f ${COMPOSE_FILE} up -d"
+ssh "${REMOTE}" "cd ${REMOTE_DIR} && docker-compose -f ${COMPOSE_FILE} build && docker-compose -f ${COMPOSE_FILE} up -d"
 
 echo "=== 3. 等待 health check ==="
 sleep 5
