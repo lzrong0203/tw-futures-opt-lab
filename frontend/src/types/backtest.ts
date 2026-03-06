@@ -1,7 +1,7 @@
 /** API types mirroring api/schemas.py */
 
 export interface BacktestRequest {
-  ratios: number[];
+  ratio: number;
   initial_capital: number;
   backtest_start: string;
   backtest_end: string;

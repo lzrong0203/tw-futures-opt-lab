@@ -21,32 +21,48 @@ export default function Home() {
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-3">
         <Card>
           <CardHeader>
-            <CardTitle>New Backtest</CardTitle>
+            <CardTitle>新增回測</CardTitle>
             <CardDescription>
-              Configure parameters and run a new backtest scenario.
+              設定參數並執行新的回測。
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Link href="/backtest/new">
-              <Button className="w-full">Run Backtest</Button>
+              <Button className="w-full">開始回測</Button>
             </Link>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>History</CardTitle>
+            <CardTitle>歷史紀錄</CardTitle>
             <CardDescription>
-              Browse and compare previous backtest results.
+              瀏覽過去的回測結果。
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Link href="/history">
               <Button variant="outline" className="w-full">
-                View History
+                查看紀錄
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>比較回測</CardTitle>
+            <CardDescription>
+              選擇兩次回測進行並排比較。
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/compare">
+              <Button variant="outline" className="w-full">
+                開始比較
               </Button>
             </Link>
           </CardContent>

@@ -93,9 +93,8 @@ export default function BacktestDetailPage() {
             value={`NT$${m.total_rollover_cost.toLocaleString()}`}
           />
           <MetricCard
-            label="Ratio"
-            value={`1:${m.futures_per_put}`}
-            sub="PUT:Futures"
+            label="期貨:PUT"
+            value={`${m.futures_per_put}:1`}
           />
         </div>
       )}

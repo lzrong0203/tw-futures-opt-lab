@@ -56,7 +56,7 @@ export default function HistoryPage() {
                 <TableRow>
                   <TableHead>Date</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Ratios</TableHead>
+                  <TableHead>比例</TableHead>
                   <TableHead className="text-right">Capital</TableHead>
                   <TableHead className="text-right">Return</TableHead>
                   <TableHead className="text-right">XIRR</TableHead>
@@ -84,7 +84,9 @@ export default function HistoryPage() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {item.parameters?.ratios.join(", ") ?? "-"}
+                      {item.parameters?.ratio != null
+                        ? `${item.parameters.ratio}:1`
+                        : "-"}
                     </TableCell>
                     <TableCell className="text-right">
                       {item.parameters

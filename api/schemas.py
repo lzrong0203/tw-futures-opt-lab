@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 # ── Request ──────────────────────────────────
@@ -13,7 +14,18 @@ from pydantic import BaseModel, Field
 class BacktestRequest(BaseModel):
     """回測請求參數。"""
 
-    ratios: list[int] = Field(default=[3, 5], description="期貨:PUT 保護比例清單")
+    ratio: int = Field(default=3, ge=1, description="期貨:PUT 保護比例")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_ratios(cls, data: Any) -> Any:
+        """Backwards compat: convert old ``ratios`` list to single ``ratio``."""
+        if isinstance(data, dict) and "ratios" in data and "ratio" not in data:
+            ratios = data.pop("ratios")
+            if isinstance(ratios, list) and len(ratios) > 0:
+                data["ratio"] = ratios[0]
+        return data
+
     initial_capital: float = Field(default=200_000, gt=0)
     backtest_start: date = Field(default=date(2025, 1, 1))
     backtest_end: date = Field(default=date(2026, 2, 28))

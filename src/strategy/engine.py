@@ -304,7 +304,9 @@ def run_backtest(
 
         if _can_add_position(state, current_price):
             if not _is_drawdown_paused(state, equity):
-                _try_add_position(state, day, futures_bar, options_today, settlement_dates, put_index)
+                _try_add_position(
+                    state, day, futures_bar, options_today, settlement_dates, put_index
+                )
             else:
                 logger.debug(
                     "回撤暫停加倉: date=%s, dd=%.1f%%",
